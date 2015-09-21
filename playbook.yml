@@ -1,0 +1,119 @@
+---
+- hosts: all
+  remote_user: vagrant
+  vars:
+    username: vagrant
+    project: exploreoregon
+    django_dir: /var/www/{{ project }}
+    virtualenv_dir: "{{ django_dir }}/env"
+  sudo: yes
+  tasks:
+    - name: terminal coloring - move .bashrc
+      copy: src=files/bashrc dest=/home/{{ username }}/.bashrc
+
+    - name: terminal coloring - source .bashrc
+      shell: . /home/{{ username }}/.bashrc
+
+    - name: apt-get update/upgrade
+      apt: upgrade=dist
+
+    - name: apt-get install pkgs
+      apt: pkg={{ item }} state=latest
+      with_items:
+        - python-dev
+        - python-pip
+        - git-core
+        - apache2
+        - libapache2-mod-wsgi
+        - mysql-server
+        - python-mysqldb
+        - libjpeg-dev
+        - zlib1g-dev
+        - libmysqlclient-dev
+
+    - name: mysql - create database
+      mysql_db: name=database1
+                state=present
+
+    - name: mysql - move database dump
+      sudo: no
+      copy: src=files/pdg_mnch_2014-04-03.mysqldump dest=/tmp/dump.sql
+
+    - name: mysql - import database dump
+      mysql_db: name=database1
+                state=import
+                target=/tmp/dump.sql
+      notify:
+        - restart mysql
+
+    - name: apache2 - move 000-default.conf
+      template: src=files/000-default.conf dest=/etc/apache2/sites-available
+      notify:
+        - restart apache2
+
+    - name: django - pip install virtualenv
+      pip: name=virtualenv state=latest
+
+    - name: django - make project directory
+      file: dest={{ django_dir }} state=directory
+            owner={{ username }} group={{ username }}
+
+    - name: django - move requirements.txt
+      copy: src=files/requirements.txt dest={{ django_dir }}
+            owner={{ username }} group={{ username }}
+
+    - name: django - move code
+      copy: src=files/code dest={{ django_dir }}
+            owner={{ username }} group={{ username }}
+
+    - name: django - mkdir wsgi
+      file: dest={{ django_dir }}/wsgi state=directory
+            owner={{ username }} group={{ username }}
+
+    - name: django - move wsgi.py
+      template: src=files/wsgi.py dest={{ django_dir }}/wsgi/wsgi.py
+                owner={{ username }} group={{ username }}
+
+    - name: django - move settings_local.py
+      template: src=files/settings_local.py
+                dest={{ django_dir }}/code/apps/mainsite/settings_local.py
+                owner={{ username }} group={{ username }}
+
+    - name: django - chmod manage.py
+      file: dest={{ django_dir }}/code/manage.py mode=0755
+            owner={{ username }} group={{ username }}
+
+    - name: django - create virtualenv
+      sudo: no
+      pip: virtualenv={{ virtualenv_dir }}
+           requirements={{ django_dir }}/requirements.txt
+
+    # - name: activate virtualenv
+    #   shell: source {{ django_dir }}/env/bin/activate
+    #   args:
+    #     executable: /bin/bash
+    #
+    # - name: manage.py collectstatic
+    #   shell: ./manage.py collectstatic --noinput
+    #   args:
+    #     chdir: "{{ django_dir }}/code"
+    #     executable: /bin/bash
+
+    # Manually collectstatic:
+    # $ cd /var/www/exploreoregon
+    # $ source env/bin/activate
+    # $ ./code/manage.py collectstatic --noinput
+    #
+    # - name: django - manage.py collectstatic
+    #   django_manage: command=collectstatic
+    #                  app_path={{ django_dir }}
+    #                  virtualenv={{ virtualenv_dir }}
+    #                  pythonpath={{ virtualenv_dir }}/bin/python
+  handlers:
+    - name: restart apache2
+      service:  name=apache2
+                state=restarted
+
+    - name: restart mysql
+      service:  name=mysql
+                state=restarted
