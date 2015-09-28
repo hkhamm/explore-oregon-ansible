@@ -47,7 +47,7 @@
         - restart mysql
 
     - name: apache2 - move 000-default.conf
-      template: src=files/000-default.conf dest=/etc/apache2/sites-available
+      template: src=files/000-default.conf.j2 dest=/etc/apache2/sites-available/000-default.conf
       notify:
         - restart apache2
 
@@ -71,11 +71,11 @@
             owner={{ username }} group={{ username }}
 
     - name: django - move wsgi.py
-      template: src=files/wsgi.py dest={{ django_dir }}/wsgi/wsgi.py
+      template: src=files/wsgi.py.j2 dest={{ django_dir }}/wsgi/wsgi.py
                 owner={{ username }} group={{ username }}
 
     - name: django - move settings_local.py
-      template: src=files/settings_local.py
+      template: src=files/settings_local.py.j2
                 dest={{ django_dir }}/code/apps/mainsite/settings_local.py
                 owner={{ username }} group={{ username }}
 
